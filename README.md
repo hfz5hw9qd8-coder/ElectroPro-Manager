@@ -289,4 +289,5 @@ Des tutoriels vidéo et de la documentation détaillée sont disponibles sur not
 
 **Développé avec ❤️ pour les électriciens professionnels**
 
-⚡ **ElectroPro Manager** - Gérez votre activité électrique efficacement
+⚡ **ElectroPro Manager** - Gérez votre activité électrique efficacement#   E l e c t r o P r o - M a n a g e r  
+ 
