@@ -1,122 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async { WidgetsFlutterBinding.ensureInitialized(); await Hive.initFlutter(); await Hive.openBox('stock'); runApp(const ElectroProApp()); }
+
+class ElectroProApp extends StatelessWidget { const ElectroProApp({super.key}); @override Widget build(BuildContext context) => MaterialApp(debugShowCheckedModeBanner:false,title:'ElectroPro Stock',theme:ThemeData(colorScheme:ColorScheme.fromSeed(seedColor:Colors.blue),useMaterial3:true),home:const StockHomePage()); }
+
+class StockHomePage extends StatefulWidget { const StockHomePage({super.key}); @override State<StockHomePage> createState()=>_StockHomePageState(); }
+class _StockHomePageState extends State<StockHomePage> {
+  final box=Hive.box('stock'); String search='';
+  List<Map<String,dynamic>> get items { final a=box.values.map((e)=>Map<String,dynamic>.from(e as Map)).toList(); a.sort((x,y)=>(x['name'] as String).compareTo(y['name'] as String)); final q=search.toLowerCase(); return q.isEmpty?a:a.where((e)=>'${e['name']} ${e['barcode']} ${e['category']}'.toLowerCase().contains(q)).toList(); }
+  Future<void> scan() async { final code=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>const ScannerPage())); if(code==null||code.isEmpty||!mounted)return; final key=box.keys.cast<dynamic>().firstWhere((k)=>Map<String,dynamic>.from(box.get(k) as Map)['barcode']==code,orElse:()=>null); if(key!=null){final i=Map<String,dynamic>.from(box.get(key) as Map);i['quantity']=(i['quantity'] as int)+1;await box.put(key,i);setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('${i['name']} : +1')));}else{await addItem(barcode:code);} }
+  Future<void> addItem({String barcode=''}) async { final name=TextEditingController(),cat=TextEditingController(text:'Matériel électrique'),qty=TextEditingController(text:'1'),min=TextEditingController(text:'1'); final ok=await showDialog<bool>(context:context,builder:(_)=>AlertDialog(title:Text(barcode.isEmpty?'Ajouter au stock':'Nouveau matériel détecté'),content:SingleChildScrollView(child:Column(children:[TextField(controller:name,autofocus:true,decoration:const InputDecoration(labelText:'Désignation *')),TextField(controller:cat,decoration:const InputDecoration(labelText:'Catégorie')),TextField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Quantité')),TextField(controller:min,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Seuil d’alerte')),TextField(controller:TextEditingController(text:barcode),readOnly:barcode.isNotEmpty,decoration:const InputDecoration(labelText:'Code-barres'))])),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Annuler')),FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text('Ajouter'))])); if(ok!=true||name.text.trim().isEmpty)return; await box.put(DateTime.now().microsecondsSinceEpoch.toString(),{'name':name.text.trim(),'category':cat.text.trim(),'barcode':barcode,'quantity':int.tryParse(qty.text)??1,'min':int.tryParse(min.text)??1});setState((){}); }
+  Future<void> change(String key,int d)async{final i=Map<String,dynamic>.from(box.get(key) as Map);i['quantity']=((i['quantity'] as int)+d).clamp(0,999999);await box.put(key,i);setState((){});}
+  @override Widget build(BuildContext context){final low=items.where((e)=>(e['quantity'] as int)<=(e['min'] as int)).length;return Scaffold(appBar:AppBar(title:const Text('⚡ ElectroPro Stock'),actions:[IconButton(onPressed:scan,icon:const Icon(Icons.qr_code_scanner))]),floatingActionButton:FloatingActionButton.extended(onPressed:scan,icon:const Icon(Icons.qr_code_scanner),label:const Text('Scanner / Ajouter')),body:Column(children:[Padding(padding:const EdgeInsets.all(16),child:Row(children:[Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('${items.length}',style:Theme.of(context).textTheme.headlineMedium),const Text('Références')])))),const SizedBox(width:10),Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('$low',style:Theme.of(context).textTheme.headlineMedium),const Text('Stock faible')]))))])),Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:TextField(onChanged:(v)=>setState(()=>search=v),decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'Rechercher désignation, catégorie ou code-barres',border:OutlineInputBorder()))),Expanded(child:items.isEmpty?const Center(child:Text('Aucun matériel. Scannez un code-barres pour commencer.')):ListView.builder(itemCount:items.length,itemBuilder:(_,n){final e=items[n];final key=box.keys.firstWhere((k)=>identical(box.get(k),box.get(k))&&Map<String,dynamic>.from(box.get(k) as Map)['name']==e['name']&&Map<String,dynamic>.from(box.get(k) as Map)['barcode']==e['barcode']);return ListTile(leading:const CircleAvatar(child:Icon(Icons.electrical_services)),title:Text(e['name'],style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text('${e['category']}\n${e['barcode'].toString().isEmpty?'Sans code-barres':'Code : ${e['barcode']}'}'),isThreeLine:true,trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(onPressed:()=>change(key.toString(),-1),icon:const Icon(Icons.remove_circle_outline)),Text('${e['quantity']}'),IconButton(onPressed:()=>change(key.toString(),1),icon:const Icon(Icons.add_circle_outline))]));}))]));}
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
+class ScannerPage extends StatefulWidget{const ScannerPage({super.key});@override State<ScannerPage> createState()=>_ScannerPageState();}
+class _ScannerPageState extends State<ScannerPage>{final controller=MobileScannerController();bool done=false;@override void dispose(){controller.dispose();super.dispose();}@override Widget build(BuildContext context)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,foregroundColor:Colors.white,title:const Text('Scanner le matériel'),actions:[IconButton(onPressed:()=>controller.toggleTorch(),icon:const Icon(Icons.flash_on))]),body:Stack(children:[MobileScanner(controller:controller,onDetect:(capture){if(done)return;final code=capture.barcodes.firstOrNull?.rawValue;if(code!=null&&code.isNotEmpty){done=true;Navigator.pop(context,code);}}),Center(child:Container(width:280,height:150,decoration:BoxDecoration(border:Border.all(color:Colors.white,width:3),borderRadius:BorderRadius.circular(16)))),const Positioned(bottom:50,left:0,right:0,child:Text('Cadrez le code-barres dans la zone',textAlign:TextAlign.center,style:TextStyle(color:Colors.white,fontSize:16))) ]);}
